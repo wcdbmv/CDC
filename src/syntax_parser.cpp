@@ -162,35 +162,38 @@ void SyntaxParser::ParseSubroutine_() {
 	}
 }
 
-/// Statements = NewLines { (Let | Input | Print | If | While | For | Call) NewLines }
+/// Statements = NewLines { (Let | Dim | Input | Print | If | While | For | Call) NewLines }
 StatementAstNodePtr SyntaxParser::ParseStatements_() {
 	ParseNewLines_();
 
 	auto sequence = MakeAstNode<SequenceAstNode>();
 	while (true) {
-		StatementAstNodePtr stat;
+		StatementAstNodePtr statement;
 		bool is_break = false;
 		switch (next_lexeme_.token) {
 		case Token::kLet:
-			stat = ParseLet_();
+			statement = ParseLet_();
+			break;
+		case Token::kDim:
+			statement = ParseDim_();
 			break;
 		case Token::kInput:
-			stat = ParseInput_();
+			statement = ParseInput_();
 			break;
 		case Token::kPrint:
-			stat = ParsePrint_();
+			statement = ParsePrint_();
 			break;
 		case Token::kIf:
-			stat = ParseIf_();
+			statement = ParseIf_();
 			break;
 		case Token::kWhile:
-			stat = ParseWhile_();
+			statement = ParseWhile_();
 			break;
 		case Token::kFor:
-			stat = ParseFor_();
+			statement = ParseFor_();
 			break;
 		case Token::kCall:
-			stat = ParseCall_();
+			statement = ParseCall_();
 			break;
 		default:
 			is_break = true;
@@ -198,7 +201,7 @@ StatementAstNodePtr SyntaxParser::ParseStatements_() {
 		if (is_break) {
 			break;
 		}
-		sequence->items.push_back(stat);
+		sequence->items.push_back(statement);
 		ParseNewLines_();
 	}
 
@@ -210,6 +213,16 @@ StatementAstNodePtr SyntaxParser::ParseLet_() {
 	VerifyAndEatNextToken_(Token::kLet);
 	auto variable_name = next_lexeme_.value;
 	VerifyAndEatNextToken_(Token::kIdentifier);
+	if (auto array = GetArray_(variable_name)) {
+		VerifyAndEatNextToken_(Token::kLeftPar);
+		auto index = ParseExpression_();
+		VerifyAndEatNextToken_(Token::kRightPar);
+		VerifyAndEatNextToken_(Token::kEq);
+		auto expression = ParseExpression_();
+		auto let = MakeAstNode<LetAstNode>(array, expression);
+		let->array_index = index;
+		return let;
+	}
 	VerifyAndEatNextToken_(Token::kEq);
 	auto expression = ParseExpression_();
 
@@ -220,6 +233,33 @@ StatementAstNodePtr SyntaxParser::ParseLet_() {
 	}
 
 	return MakeAstNode<LetAstNode>(variable, expression);
+}
+
+/// Dim = 'DIM' IDENT '(' Size ')'
+StatementAstNodePtr SyntaxParser::ParseDim_() {
+	VerifyAndEatNextToken_(Token::kDim);
+	auto variable_name = next_lexeme_.value;
+	VerifyAndEatNextToken_(Token::kIdentifier);
+	VerifyAndEatNextToken_(Token::kLeftPar);
+
+	NumberAstNodePtr size;
+	if (next_lexeme_.OfType(Token::kNumber)) {
+		auto value = next_lexeme_.value;
+		VerifyAndEatNextToken_(Token::kNumber);
+		size = MakeAstNode<NumberAstNode>(std::stod(value));
+	}
+
+	VerifyAndEatNextToken_(Token::kRightPar);
+
+	auto variable = CreateOrGetLocalVariable_(variable_name, false);
+	variable->SetType(DataType::kArray);
+	variable->array_size = static_cast<size_t>(size->GetValue());
+
+	/*if (variable_name == current_subroutine_->GetName()) {
+		current_subroutine_->is_returning_value = true;
+	}*/
+
+	return MakeAstNode<DimAstNode>(variable, size);
 }
 
 /// Input = 'INPUT' IDENT
@@ -235,6 +275,14 @@ StatementAstNodePtr SyntaxParser::ParseInput_() {
 
 	auto variable_name = next_lexeme_.value;
 	VerifyAndEatNextToken_(Token::kIdentifier);
+
+	if (auto array = GetArray_(variable_name)) {
+		VerifyAndEatNextToken_(Token::kLeftPar);
+		auto expression = ParseExpression_();
+		VerifyAndEatNextToken_(Token::kRightPar);
+		auto item = MakeAstNode<ItemAstNode>(array, expression);
+		return MakeAstNode<InputAstNode>(MakeAstNode<TextAstNode>(prompt), nullptr, item);
+	}
 
 	auto variable = CreateOrGetLocalVariable_(variable_name, false);
 	return MakeAstNode<InputAstNode>(MakeAstNode<TextAstNode>(prompt), variable);
@@ -442,6 +490,14 @@ ExpressionAstNodePtr SyntaxParser::ParseFactor_() {
 	// IDENT ['(' [ExpressionList] ')']
 	if (next_lexeme_.OfType(Token::kIdentifier)) {
 		auto name = next_lexeme_.value;
+		if (auto array = GetArray_(name)) {
+			VerifyAndEatNextToken_(Token::kIdentifier);
+			VerifyAndEatNextToken_(Token::kLeftPar);
+			auto expression = ParseExpression_();
+			VerifyAndEatNextToken_(Token::kRightPar);
+			return MakeAstNode<ItemAstNode>(array, expression);
+		}
+
 		VerifyAndEatNextToken_(Token::kIdentifier);
 		if (next_lexeme_.OfType(Token::kLeftPar)) {
 			std::vector<ExpressionAstNodePtr> arguments;
@@ -525,6 +581,19 @@ VariableAstNodePtr SyntaxParser::CreateOrGetLocalVariable_(std::string_view name
 	locals.push_back(variable);
 
 	return variable;
+}
+
+VariableAstNodePtr SyntaxParser::GetArray_(std::string_view name) {
+	auto& locals = current_subroutine_->local_variables;
+
+	auto it = std::find_if(locals.begin(), locals.end(), [&name](auto vp) {
+		return sAreVariablesNamesEqual(name, vp->GetName());
+	});
+	if (it != locals.end() && (*it)->OfType(DataType::kArray)) {
+		return *it;
+	}
+
+	return nullptr;
 }
 
 SubroutineAstNodePtr SyntaxParser::SafeGetSubroutine_(std::string_view name) {

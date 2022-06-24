@@ -44,6 +44,7 @@ std::string ToString(DataType type) {
 	case DataType::kBoolean: return "BOOLEAN";
 	case DataType::kNumeric: return "NUMBER";
 	case DataType::kTextual: return "TEXT";
+	case DataType::kArray: return "ARRAY";
 	default: return "UNDEFINED";
 	}
 }

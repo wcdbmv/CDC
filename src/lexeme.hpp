@@ -20,6 +20,7 @@ enum class Token {
 	kInput,
 	kPrint,
 	kLet,
+	kDim,
 	kIf,
 	kThen,
 	kElseIf,

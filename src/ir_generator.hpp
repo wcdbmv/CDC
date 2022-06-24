@@ -56,6 +56,7 @@ private:
 	llvm::Constant* Emit_(NumberAstNodePtr);
 	llvm::Constant* Emit_(BooleanAstNodePtr);
 	llvm::UnaryInstruction* Emit_(VariableAstNodePtr);
+	llvm::Value* Emit_(ItemAstNodePtr);
 
 	llvm::Type* ToLlvmType_(DataType type);
 	llvm::Type* ToLlvmType_(std::string_view name);

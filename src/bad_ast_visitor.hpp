@@ -15,6 +15,8 @@ protected:
 
 	virtual void visit(SequenceAstNodePtr node) = 0;
 	virtual void visit(LetAstNodePtr node) = 0;
+	virtual void visit(DimAstNodePtr node) = 0;
+	virtual void visit(ItemAstNodePtr node) = 0;
 	virtual void visit(InputAstNodePtr node) = 0;
 	virtual void visit(PrintAstNodePtr node) = 0;
 	virtual void visit(IfAstNodePtr node) = 0;

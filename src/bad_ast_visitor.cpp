@@ -44,6 +44,12 @@ void BadAstVisitor::visit(AstNodePtr node) {
 	case AstNodeType::kLet:
 		visit(std::dynamic_pointer_cast<LetAstNode>(node));
 		break;
+	case AstNodeType::kDim:
+		visit(std::dynamic_pointer_cast<DimAstNode>(node));
+		break;
+	case AstNodeType::kItem:
+		visit(std::dynamic_pointer_cast<ItemAstNode>(node));
+		break;
 	case AstNodeType::kIf:
 		visit(std::dynamic_pointer_cast<IfAstNode>(node));
 		break;

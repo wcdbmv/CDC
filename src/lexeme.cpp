@@ -15,6 +15,7 @@ std::string ToString(Token token) {
 	case Token::kInput: return "INPUT";
 	case Token::kPrint: return "PRINT";
 	case Token::kLet: return "LET";
+	case Token::kDim: return "DIM";
 	case Token::kIf: return "IF";
 	case Token::kThen: return "THEN";
 	case Token::kElseIf: return "ELSEIF";

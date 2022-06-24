@@ -28,6 +28,7 @@ private:
 	StatementAstNodePtr ParseInput_();
 	StatementAstNodePtr ParsePrint_();
 	StatementAstNodePtr ParseLet_();
+	StatementAstNodePtr ParseDim_();
 	StatementAstNodePtr ParseIf_();
 	StatementAstNodePtr ParseWhile_();
 	StatementAstNodePtr ParseFor_();
@@ -44,6 +45,7 @@ private:
 
 	/// Создаёт локальную переменную или возвращает уже существующую
 	VariableAstNodePtr CreateOrGetLocalVariable_(std::string_view name, bool is_r_value);
+	VariableAstNodePtr GetArray_(std::string_view name);
 
 	/// Находит подпрограмму и проверяет типы аргументов и параметров
 	SubroutineAstNodePtr SafeGetSubroutine_(std::string_view name);

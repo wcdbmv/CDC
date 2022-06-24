@@ -9,6 +9,7 @@ namespace bsq {
 std::map<std::string_view, Token> LexemeReader::keywords_ = {
 	{"SUB",    Token::kSubroutine},
 	{"LET",    Token::kLet},
+	{"DIM",    Token::kDim},
 	{"PRINT",  Token::kPrint},
 	{"INPUT",  Token::kInput},
 	{"IF",     Token::kIf},

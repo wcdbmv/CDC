@@ -63,12 +63,33 @@ void SemanticChecker::visit(SequenceAstNodePtr node) {
 }
 
 void SemanticChecker::visit(LetAstNodePtr node) {
+	if (node->array_index) {
+		visit(node->array_index);
+		visit(node->expression);
+		if (node->expression->GetType() != DataType::kNumeric) {
+			throw TypeCheckError{
+				"Переменной типа " + ToString(node->variable->GetType()) + " присваивается выражение типа " + ToString(node->expression->GetType())
+			};
+		}
+		return;
+	}
 	visit(node->expression);
 	if (node->expression->GetType() != node->variable->GetType()) {
 		throw TypeCheckError{
 			"Переменной типа " + ToString(node->variable->GetType()) +
 			" присваивается выражение типа " + ToString(node->expression->GetType())
 		};
+	}
+}
+
+void SemanticChecker::visit(DimAstNodePtr node) {
+	if (node->size->GetValue() <= 0) {
+		throw TypeCheckError{"Размер массива должен быть натуральным числом"};
+	}
+	node->variable->SetType(DataType::kArray);
+	node->variable->array_size = static_cast<size_t>(node->size->GetValue());
+	if (static_cast<double>(node->variable->array_size) != node->size->GetValue()) {
+		throw TypeCheckError{"Размер массива должен быть натуральным числом"};
 	}
 }
 
@@ -239,6 +260,16 @@ void SemanticChecker::visit(UnaryExpressionAstNodePtr node) {
 		};
 	} else {
 		node->SetType(DataType::kNumeric);
+	}
+}
+
+void SemanticChecker::visit(ItemAstNodePtr node) {
+	if (node->array->NotOfType(DataType::kArray)) {
+		throw TypeCheckError{"Обращаться по индексу можно только к переменным типа ARRAY"};
+	}
+	visit(node->expression);
+	if (node->expression->NotOfType(DataType::kNumeric)) {
+		throw TypeCheckError{"Выражение для доступа по индексу должно быть числовым"};
 	}
 }
 

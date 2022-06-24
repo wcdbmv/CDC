@@ -19,6 +19,7 @@ private:
 
 	void visit(SequenceAstNodePtr node) override;
 	void visit(LetAstNodePtr node) override;
+	void visit(DimAstNodePtr node) override;
 	void visit(InputAstNodePtr node) override;
 	void visit(PrintAstNodePtr node) override;
 	void visit(IfAstNodePtr node) override;
@@ -29,6 +30,7 @@ private:
 	void visit(ApplyAstNodePtr node) override;
 	void visit(BinaryExpressionAstNodePtr node) override;
 	void visit(UnaryExpressionAstNodePtr node) override;
+	void visit(ItemAstNodePtr node) override;
 	void visit(VariableAstNodePtr node) override;
 	void visit(TextAstNodePtr node) override;
 	void visit(NumberAstNodePtr node) override;

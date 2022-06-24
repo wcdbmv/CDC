@@ -94,15 +94,21 @@ void IrGenerator::Emit_(SubroutineAstNodePtr subroutine) {
 	variable_addresses_.clear();
 
 	std::list<llvm::Value*> local_text_variables;
+	std::list<llvm::Value*> local_array_variables;
 
 	for (const auto& local_variable : subroutine->local_variables) {
 		auto* llvm_type = local_variable->GetType() == DataType::kBoolean
 			? ir_builder_.getInt8Ty()
 			: ToLlvmType_(local_variable->GetType());  // TODO
-		auto* address = ir_builder_.CreateAlloca(llvm_type, nullptr, local_variable->GetName() + "_addr");
+		auto* array_size = local_variable->GetType() == DataType::kArray
+			? llvm::ConstantInt::get(llvm::Type::getInt32Ty(context_), local_variable->array_size)
+			: nullptr;
+		auto* address = ir_builder_.CreateAlloca(llvm_type, array_size, local_variable->GetName() + "_addr");
 		variable_addresses_[local_variable->GetName()] = address;
 		if (local_variable->OfType(DataType::kTextual)) {
 			local_text_variables.push_back(address);
+		} else if (local_variable->OfType(DataType::kArray)) {
+			local_array_variables.push_back(address);
 		}
 	}
 
@@ -111,6 +117,7 @@ void IrGenerator::Emit_(SubroutineAstNodePtr subroutine) {
 			auto* parameter_value = CreateLibraryFunctionCall_("bsq_text_clone", {&arg});
 			ir_builder_.CreateStore(parameter_value, variable_addresses_[arg.getName().str()]);
 			local_text_variables.remove(variable_addresses_[arg.getName().str()]);
+			local_array_variables.remove(variable_addresses_[arg.getName().str()]);
 		} else {
 			ir_builder_.CreateStore(&arg, variable_addresses_[arg.getName().str()]);
 		}
@@ -193,9 +200,18 @@ void IrGenerator::Emit_(LetAstNodePtr let) {
 	TRACE(Let);
 
 	auto* value = Emit_(let->expression);
+	if (std::dynamic_pointer_cast<ItemAstNode>(let->expression)) {
+		value = ir_builder_.CreateLoad(NumericType_, value);
+	}
 	auto* address = variable_addresses_[let->variable->GetName()];
 
-	if (let->variable->OfType(DataType::kTextual)) {
+	if (let->variable->OfType(DataType::kArray)) {
+		auto* result = Emit_(let->array_index);
+		auto* idx_p_1 = ir_builder_.CreateFPToSI(result, ir_builder_.getInt32Ty());
+		auto* idx = ir_builder_.CreateAdd(ir_builder_.getInt32(-1), idx_p_1);
+		address = ir_builder_.CreateGEP(NumericType_, address, idx);
+	}
+	else if (let->variable->OfType(DataType::kTextual)) {
 		auto* load = ir_builder_.CreateLoad(TextualType_, address);
 		CreateLibraryFunctionCall_("free", {load});
 		if (!NeedCreateTemporaryText_(let->expression)) {
@@ -214,10 +230,11 @@ void IrGenerator::Emit_(InputAstNodePtr input) {
 	auto* prompt = Emit_(input->prompt);
 
 	std::string_view function_name;
-	if (input->variable->OfType(DataType::kBoolean)) {
+	if (input->item) {
+		function_name = "bsq_number_input";
+	} else if (input->variable->OfType(DataType::kBoolean)) {
 		function_name = "bool_input";
-	}
-	if (input->variable->OfType(DataType::kNumeric)) {
+	} else if (input->variable->OfType(DataType::kNumeric)) {
 		function_name = "bsq_number_input";
 	} else if (input->variable->OfType(DataType::kTextual)) {
 		function_name = "bsq_text_input";
@@ -225,7 +242,15 @@ void IrGenerator::Emit_(InputAstNodePtr input) {
 
 	auto* value = CreateLibraryFunctionCall_(function_name, {prompt});
 
-	ir_builder_.CreateStore(value, variable_addresses_[input->variable->GetName()]);
+	if (input->item) {
+		auto* result = Emit_(input->item->expression);
+		auto* idx_p_1 = ir_builder_.CreateFPToSI(result, ir_builder_.getInt32Ty());
+		auto* idx = ir_builder_.CreateAdd(ir_builder_.getInt32(-1), idx_p_1);
+		auto* gep = ir_builder_.CreateGEP(ToLlvmType_(input->item->array->GetType()), variable_addresses_[input->item->array->GetName()], idx);
+		ir_builder_.CreateStore(value, gep);
+	} else {
+		ir_builder_.CreateStore(value, variable_addresses_[input->variable->GetName()]);
+	}
 }
 
 void IrGenerator::Emit_(PrintAstNodePtr print) {
@@ -241,6 +266,9 @@ void IrGenerator::Emit_(PrintAstNodePtr print) {
 			CreateLibraryFunctionCall_("free", {expression});
 		}
 	} else if (print->expression->OfType(DataType::kNumeric)) {
+		if (std::dynamic_pointer_cast<ItemAstNode>(print->expression)) {
+			expression = ir_builder_.CreateLoad(NumericType_, expression);
+		}
 		CreateLibraryFunctionCall_("bsq_number_print", {expression});
 	}
 }
@@ -365,6 +393,9 @@ llvm::Value* IrGenerator::Emit_(ExpressionAstNodePtr expression) {
 	case AstNodeType::kVariable:
 		result = Emit_(std::dynamic_pointer_cast<VariableAstNode>(expression));
 		break;
+	case AstNodeType::kItem:
+		result = Emit_(std::dynamic_pointer_cast<ItemAstNode>(expression));
+		break;
 	case AstNodeType::kUnary:
 		result = Emit_(std::dynamic_pointer_cast<UnaryExpressionAstNode>(expression));
 		break;
@@ -420,6 +451,15 @@ llvm::UnaryInstruction* IrGenerator::Emit_(VariableAstNodePtr variable) {
 	return ir_builder_.CreateLoad(ToLlvmType_(variable->GetType()), variable_address, variable->GetName());
 }
 
+llvm::Value* IrGenerator::Emit_(ItemAstNodePtr item) {
+	TRACE(Item);
+
+	auto* result = Emit_(item->expression);
+	auto* idx_p_1 = ir_builder_.CreateFPToSI(result, ir_builder_.getInt32Ty());
+	auto* idx = ir_builder_.CreateAdd(ir_builder_.getInt32(-1), idx_p_1);
+	return ir_builder_.CreateGEP(NumericType_, variable_addresses_[item->array->GetName()], idx);
+}
+
 llvm::Value* IrGenerator::Emit_(ApplyAstNodePtr apply) {
 	TRACE(Apply);
 
@@ -455,7 +495,13 @@ llvm::Value* IrGenerator::Emit_(BinaryExpressionAstNodePtr binary) {
 		&& binary->GetRightOperand()->OfType(DataType::kBoolean);
 
 	auto* lhs = Emit_(binary->GetLeftOperand());
+	if (std::dynamic_pointer_cast<ItemAstNode>(binary->GetLeftOperand())) {
+		lhs = ir_builder_.CreateLoad(NumericType_, lhs);
+	}
 	auto* rhs = Emit_(binary->GetRightOperand());
+	if (std::dynamic_pointer_cast<ItemAstNode>(binary->GetRightOperand())) {
+		rhs = ir_builder_.CreateLoad(NumericType_, rhs);
+	}
 
 	llvm::Value* return_value = nullptr;
 	switch (binary->GetOperation()) {
@@ -691,6 +737,8 @@ llvm::Type* IrGenerator::ToLlvmType_(DataType type) {
 		return NumericType_;
 	case DataType::kTextual:
 		return TextualType_;
+	case DataType::kArray:
+		return NumericType_;
 	default:
 		return VoidType_;
 	}

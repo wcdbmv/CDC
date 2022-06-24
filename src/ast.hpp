@@ -22,6 +22,8 @@ enum class AstNodeType {
 	kInput,
 	kPrint,
 	kLet,
+	kDim,
+	kItem,
 	kIf,
 	kWhile,
 	kFor,
@@ -61,6 +63,7 @@ enum class DataType : char {
 	kBoolean = 'B',
 	kNumeric = 'N',
 	kTextual = 'T',
+	kArray = 'A',
 };
 
 /// @brief Тип идентификатора
@@ -158,12 +161,31 @@ public:
 
 	[[nodiscard]] const std::string& GetName() const { return name_; }
 
+	size_t array_size = 0;
+
 private:
 	std::string name_;
 };
 
 using VariableAstNodePtr = std::shared_ptr<VariableAstNode>;
 using VariableAstNodeCPtr = std::shared_ptr<const VariableAstNode>;
+
+
+class ItemAstNode : public ExpressionAstNode {
+public:
+	ItemAstNode(VariableAstNodePtr array, ExpressionAstNodePtr expression)
+		: ExpressionAstNode{AstNodeType::kItem, DataType::kNumeric}
+		, array{std::move(array)}
+		, expression{std::move(expression)}
+	{
+	}
+
+	VariableAstNodePtr array;
+	ExpressionAstNodePtr expression;
+};
+
+using ItemAstNodePtr = std::shared_ptr<ItemAstNode>;
+using ItemAstNodeCPtr = std::shared_ptr<const ItemAstNode>;
 
 
 enum class Operation {
@@ -291,15 +313,17 @@ using SequenceAstNodeCPtr = std::shared_ptr<const SequenceAstNode>;
 
 class InputAstNode : public StatementAstNode {
 public:
-	InputAstNode(TextAstNodePtr prompt, VariableAstNodePtr variable)
+	InputAstNode(TextAstNodePtr prompt, VariableAstNodePtr variable, ItemAstNodePtr item = nullptr)
 		: StatementAstNode{AstNodeType::kInput}
 		, prompt{std::move(prompt)}
 		, variable{std::move(variable)}
+		, item{std::move(item)}
 	{
 	}
 
 	TextAstNodePtr prompt;
 	VariableAstNodePtr variable;
+	ItemAstNodePtr item;
 };
 
 using InputAstNodePtr = std::shared_ptr<InputAstNode>;
@@ -332,10 +356,28 @@ public:
 
 	VariableAstNodePtr variable;
 	ExpressionAstNodePtr expression;
+	ExpressionAstNodePtr array_index;
 };
 
 using LetAstNodePtr = std::shared_ptr<LetAstNode>;
 using LetAstNodeCPtr = std::shared_ptr<const LetAstNode>;
+
+
+class DimAstNode : public StatementAstNode {
+public:
+	DimAstNode(VariableAstNodePtr variable, NumberAstNodePtr size)
+		: StatementAstNode{AstNodeType::kDim}
+		, variable{std::move(variable)}
+		, size{std::move(size)}
+	{
+	}
+
+	VariableAstNodePtr variable;
+	NumberAstNodePtr size;
+};
+
+using DimAstNodePtr = std::shared_ptr<DimAstNode>;
+using DimAstNodeCPtr = std::shared_ptr<const DimAstNode>;
 
 
 class IfAstNode : public StatementAstNode {
