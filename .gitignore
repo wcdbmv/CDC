@@ -1,0 +1,17 @@
+*.slo
+*.lo
+*.o
+*.obj
+
+# Executables
+*.exe
+*.out
+*.app
+
+build
+*.s
+
+*.ll
+
+cmake-build*
+.idea/
